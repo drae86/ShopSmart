@@ -1,0 +1,255 @@
+# Creating a self-contained static demo (HTML + JS + Tailwind via CDN)
+import os, textwrap, json, shutil
+
+out_dir = "/mnt/data/shopsmart_demo"
+os.makedirs(out_dir, exist_ok=True)
+
+html = textwrap.dedent("""
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ShopSmart — Demo</title>
+  <!-- Tailwind Play CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Simple styling -->
+  <style>
+    body { font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial; }
+  </style>
+</head>
+<body class="bg-slate-50 min-h-screen p-6">
+  <div class="max-w-4xl mx-auto">
+    <header class="flex items-center justify-between mb-6">
+      <h1 class="text-2xl font-bold">ShopSmart — Live Demo</h1>
+      <div>
+        <label class="text-sm mr-2">Store:</label>
+        <select id="storeSelect" class="px-2 py-1 border rounded"></select>
+      </div>
+    </header>
+
+    <main class="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <!-- Left: Meal setup -->
+      <section class="md:col-span-1 bg-white p-4 rounded shadow">
+        <h2 class="font-semibold mb-2">Meal Setup</h2>
+        <div id="recipes" class="space-y-2"></div>
+        <div class="mt-4">
+          <label class="text-sm">Budget $</label>
+          <input id="budgetInput" type="number" value="60" class="ml-2 px-2 py-1 border rounded w-28" />
+        </div>
+        <div class="mt-4">
+          <button id="generateBtn" class="px-3 py-1 bg-blue-600 text-white rounded">Generate Shopping List</button>
+        </div>
+      </section>
+
+      <!-- Middle: Shopping list -->
+      <section class="md:col-span-1 bg-white p-4 rounded shadow">
+        <h2 class="font-semibold mb-2">Shopping List</h2>
+        <div id="shoppingList" class="space-y-2"></div>
+        <div class="mt-4">
+          <div class="text-sm text-slate-600">Est. total: $<span id="totalCost">0.00</span></div>
+          <div class="mt-2">
+            <div class="w-full bg-gray-200 rounded-full h-3">
+              <div id="progBar" class="h-3 rounded-full" style="width:0%; background:linear-gradient(90deg,#34d399,#60a5fa)"></div>
+            </div>
+            <div class="text-xs text-slate-500 mt-1">Remaining: $<span id="remaining">0.00</span></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Right: Compare stores -->
+      <section class="md:col-span-1 bg-white p-4 rounded shadow">
+        <h2 class="font-semibold mb-2">Compare Stores</h2>
+        <div id="compare" class="space-y-2"></div>
+        <div class="mt-4 text-sm text-slate-600">
+          Tip: choose the cheapest store or split-shop for best savings.
+        </div>
+      </section>
+    </main>
+
+    <footer class="mt-6 text-xs text-slate-400">
+      Mock demo — uses sample data. Downloadable as a static HTML file.
+    </footer>
+  </div>
+
+  <script>
+    // Mock data (matches the canvas)
+    const STORES = {
+      "Aldi": { "Broccoli": 1.9, "Rice": 1.4, "Pasta": 1.2, "Tomato Sauce": 1.6, "Milk": 1.1, "Eggs": 0.3 },
+      "Coles": { "Broccoli": 2.3, "Rice": 1.9, "Pasta": 1.6, "Tomato Sauce": 1.9, "Milk": 1.2, "Eggs": 0.35 },
+      "Woolies": { "Broccoli": 2.5, "Rice": 1.8, "Pasta": 1.5, "Tomato Sauce": 2.0, "Milk": 1.25, "Eggs": 0.33 }
+    };
+
+    const RECIPES = [
+      { id: 'r1', name: 'Veggie Stir-fry', ingredients: [{ name: 'Broccoli', qty_g: 300 }, { name: 'Rice', qty_g: 200 }]},
+      { id: 'r2', name: 'Pasta & Tomato', ingredients: [{ name: 'Pasta', qty_g: 200 }, { name: 'Tomato Sauce', qty_g: 150 }]},
+      { id: 'r3', name: 'Omelette', ingredients: [{ name: 'Eggs', qty_g: 200 }, { name: 'Milk', qty_g: 100 }]},
+      { id: 'r4', name: 'Rice Bowl', ingredients: [{ name: 'Rice', qty_g: 250 }, { name: 'Broccoli', qty_g: 150 }]}
+    ];
+
+    // Populate stores select
+    const storeSelect = document.getElementById('storeSelect');
+    Object.keys(STORES).forEach(s => {
+      const o = document.createElement('option'); o.value = s; o.textContent = s; storeSelect.appendChild(o);
+    });
+
+    // Populate recipes list with checkboxes
+    const recipesDiv = document.getElementById('recipes');
+    RECIPES.forEach(r => {
+      const wrapper = document.createElement('div');
+      wrapper.className = 'flex items-center justify-between p-2 border rounded';
+      wrapper.innerHTML = `
+        <div>
+          <div class="font-medium">${r.name}</div>
+          <div class="text-xs text-slate-500">Ingredients: ${r.ingredients.map(i=>i.name).join(', ')}</div>
+        </div>
+        <div>
+          <input type="checkbox" data-id="${r.id}" />
+        </div>
+      `;
+      recipesDiv.appendChild(wrapper);
+    });
+
+    function aggregateSelected() {
+      const checks = recipesDiv.querySelectorAll('input[type=checkbox]');
+      const totals = {};
+      checks.forEach(cb => {
+        if (cb.checked) {
+          const id = cb.getAttribute('data-id');
+          const r = RECIPES.find(x => x.id === id);
+          r.ingredients.forEach(ing => { totals[ing.name] = (totals[ing.name] || 0) + ing.qty_g; });
+        }
+      });
+      return totals;
+    }
+
+    function estimateCost(totals, store) {
+      let total = 0;
+      const breakdown = {};
+      Object.keys(totals).forEach(name => {
+        const qty = totals[name];
+        const pricePer100g = STORES[store][name] ?? 0;
+        const cost = pricePer100g * (qty / 100);
+        breakdown[name] = cost;
+        total += cost;
+      });
+      return { total: +(total.toFixed(2)), breakdown };
+    }
+
+    function renderShoppingList(totals, store, budget) {
+      const shoppingDiv = document.getElementById('shoppingList');
+      shoppingDiv.innerHTML = '';
+      const res = estimateCost(totals, store);
+      document.getElementById('totalCost').textContent = res.total.toFixed(2);
+      const remaining = Math.max(0, (budget - res.total)).toFixed(2);
+      document.getElementById('remaining').textContent = remaining;
+      // progress
+      const pct = Math.min(100, Math.round((res.total / budget) * 100));
+      document.getElementById('progBar').style.width = pct + '%';
+
+      Object.keys(res.breakdown).forEach(name => {
+        const cost = res.breakdown[name];
+        const row = document.createElement('div');
+        row.className = 'flex items-center justify-between p-2 border rounded';
+        row.innerHTML = `
+          <div class="flex items-center gap-3">
+            <input type="checkbox" />
+            <div>
+              <div class="font-medium">${name}</div>
+              <div class="text-xs text-slate-500">Qty: ${totals[name]} g</div>
+            </div>
+          </div>
+          <div class="text-sm">$${cost.toFixed(2)}</div>
+        `;
+        shoppingDiv.appendChild(row);
+      });
+
+      // If over budget, show suggestion
+      const overEl = document.getElementById('overMsg');
+      if (!overEl) {
+        const msg = document.createElement('div');
+        msg.id = 'overMsg';
+        msg.className = 'mt-3 text-sm';
+        shoppingDiv.appendChild(msg);
+      }
+      const msgEl = document.getElementById('overMsg');
+      if (res.total > budget) {
+        // find cheapest store
+        let best = { store: store, total: res.total };
+        Object.keys(STORES).forEach(s => {
+          const r = estimateCost(totals, s);
+          if (r.total < best.total) best = { store: s, total: r.total };
+        });
+        if (best.store !== store) {
+          msgEl.innerHTML = `<div class="text-red-600">Over budget! Try <strong>${best.store}</strong> — est. $${best.total.toFixed(2)} (save $${(res.total - best.total).toFixed(2)})</div>`;
+        } else {
+          msgEl.innerHTML = `<div class="text-red-600">Over budget and selected store is already cheapest (est. $${res.total.toFixed(2)})</div>`;
+        }
+      } else {
+        msgEl.innerHTML = `<div class="text-green-700">Within budget</div>`;
+      }
+    }
+
+    function renderCompare(totals) {
+      const comp = document.getElementById('compare');
+      comp.innerHTML = '';
+      Object.keys(STORES).forEach(s => {
+        const r = estimateCost(totals, s);
+        const card = document.createElement('div');
+        card.className = 'p-3 border rounded flex items-center justify-between';
+        card.innerHTML = `
+          <div>
+            <div class="font-medium">${s}</div>
+            <div class="text-xs text-slate-500">Est total: $${r.total.toFixed(2)}</div>
+          </div>
+          <div>
+            <button data-store="${s}" class="px-2 py-1 bg-indigo-50 rounded select-store">Choose</button>
+          </div>
+        `;
+        comp.appendChild(card);
+      });
+      // attach listeners
+      comp.querySelectorAll('.select-store').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          const s = btn.getAttribute('data-store');
+          storeSelect.value = s;
+          document.getElementById('generateBtn').click();
+        });
+      });
+    }
+
+    // Generate button
+    document.getElementById('generateBtn').addEventListener('click', () => {
+      const totals = aggregateSelected();
+      const store = storeSelect.value;
+      const budget = Number(document.getElementById('budgetInput').value) || 0;
+      renderShoppingList(totals, store, budget);
+      renderCompare(totals);
+    });
+
+    // Initialize with first recipe selected and initial render
+    document.querySelector('input[data-id="r1"]').checked = true;
+    document.getElementById('generateBtn').click();
+  </script>
+</body>
+</html>
+""")
+
+filepath = os.path.join(out_dir, "index.html")
+with open(filepath, "w", encoding="utf-8") as f:
+    f.write(html)
+
+# Also create a small README
+readme = """ShopSmart Demo — Static HTML\n\nOpen index.html in a browser to run the demo locally.\nGenerated: 2025-12-01\n"""
+with open(os.path.join(out_dir, "README.txt"), "w", encoding="utf-8") as f:
+    f.write(readme)
+
+# Zip the folder for convenience
+zip_path = "/mnt/data/shopsmart_demo.zip"
+shutil.make_archive("/mnt/data/shopsmart_demo", 'zip', out_dir)
+
+print("Created demo files:")
+print(" - HTML:", filepath)
+print(" - ZIP:", zip_path)
+# Provide paths to user
+{"html_path": filepath, "zip_path": zip_path}

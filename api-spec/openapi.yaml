@@ -1,0 +1,439 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: ShopSmart API
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: stores
+    description: Grocery store operations
+  - name: ingredients
+    description: Ingredient operations
+  - name: recipes
+    description: Recipe operations
+  - name: shopping
+    description: Shopping list operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+
+  /stores:
+    get:
+      operationId: listStores
+      tags: [stores]
+      summary: List all stores
+      responses:
+        "200":
+          description: List of stores
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Store"
+
+  /ingredients:
+    get:
+      operationId: listIngredients
+      tags: [ingredients]
+      summary: List all ingredients with prices
+      responses:
+        "200":
+          description: List of ingredients with prices
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Ingredient"
+
+  /recipes:
+    get:
+      operationId: listRecipes
+      tags: [recipes]
+      summary: List all recipes
+      responses:
+        "200":
+          description: List of recipes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Recipe"
+    post:
+      operationId: createRecipe
+      tags: [recipes]
+      summary: Create a new recipe
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecipeInput"
+      responses:
+        "201":
+          description: Created recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+
+  /recipes/{id}:
+    get:
+      operationId: getRecipe
+      tags: [recipes]
+      summary: Get a recipe by ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+        "404":
+          description: Not found
+    put:
+      operationId: updateRecipe
+      tags: [recipes]
+      summary: Update a recipe
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RecipeInput"
+      responses:
+        "200":
+          description: Updated recipe
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Recipe"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteRecipe
+      tags: [recipes]
+      summary: Delete a recipe
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+
+  /shopping/list:
+    get:
+      operationId: getShoppingList
+      tags: [shopping]
+      summary: Generate shopping list for selected recipes at a store
+      parameters:
+        - name: recipeIds
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated recipe IDs
+        - name: storeId
+          in: query
+          required: true
+          schema:
+            type: integer
+        - name: budget
+          in: query
+          required: false
+          schema:
+            type: number
+      responses:
+        "200":
+          description: Shopping list with costs
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingList"
+
+  /shopping/compare:
+    get:
+      operationId: compareStores
+      tags: [shopping]
+      summary: Compare cost of selected recipes across all stores
+      parameters:
+        - name: recipeIds
+          in: query
+          required: true
+          schema:
+            type: string
+          description: Comma-separated recipe IDs
+      responses:
+        "200":
+          description: Store comparison
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/StoreComparison"
+
+  /shopping/summary:
+    get:
+      operationId: getShoppingSummary
+      tags: [shopping]
+      summary: Get summary stats for all recipes across all stores
+      responses:
+        "200":
+          description: Summary stats
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShoppingSummary"
+
+components:
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+
+    Store:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        color:
+          type: string
+      required:
+        - id
+        - name
+        - color
+
+    Ingredient:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        unit:
+          type: string
+        prices:
+          type: array
+          items:
+            $ref: "#/components/schemas/IngredientPrice"
+      required:
+        - id
+        - name
+        - unit
+        - prices
+
+    IngredientPrice:
+      type: object
+      properties:
+        storeId:
+          type: integer
+        storeName:
+          type: string
+        pricePer100g:
+          type: number
+      required:
+        - storeId
+        - storeName
+        - pricePer100g
+
+    RecipeIngredient:
+      type: object
+      properties:
+        ingredientId:
+          type: integer
+        ingredientName:
+          type: string
+        qtyG:
+          type: number
+      required:
+        - ingredientId
+        - ingredientName
+        - qtyG
+
+    RecipeIngredientInput:
+      type: object
+      properties:
+        ingredientId:
+          type: integer
+        qtyG:
+          type: number
+      required:
+        - ingredientId
+        - qtyG
+
+    Recipe:
+      type: object
+      properties:
+        id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: ["string", "null"]
+        servings:
+          type: integer
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeIngredient"
+      required:
+        - id
+        - name
+        - servings
+        - ingredients
+
+    RecipeInput:
+      type: object
+      properties:
+        name:
+          type: string
+          minLength: 1
+        description:
+          type: string
+        servings:
+          type: integer
+          minimum: 1
+        ingredients:
+          type: array
+          items:
+            $ref: "#/components/schemas/RecipeIngredientInput"
+      required:
+        - name
+        - servings
+        - ingredients
+
+    ShoppingListItem:
+      type: object
+      properties:
+        ingredientId:
+          type: integer
+        ingredientName:
+          type: string
+        totalQtyG:
+          type: number
+        estimatedCost:
+          type: number
+        checked:
+          type: boolean
+      required:
+        - ingredientId
+        - ingredientName
+        - totalQtyG
+        - estimatedCost
+        - checked
+
+    ShoppingList:
+      type: object
+      properties:
+        storeId:
+          type: integer
+        storeName:
+          type: string
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShoppingListItem"
+        totalCost:
+          type: number
+        budget:
+          type: ["number", "null"]
+        withinBudget:
+          type: boolean
+        cheaperStoreId:
+          type: ["integer", "null"]
+        cheaperStoreName:
+          type: ["string", "null"]
+        cheaperStoreCost:
+          type: ["number", "null"]
+      required:
+        - storeId
+        - storeName
+        - items
+        - totalCost
+        - withinBudget
+
+    StoreComparison:
+      type: object
+      properties:
+        storeId:
+          type: integer
+        storeName:
+          type: string
+        color:
+          type: string
+        totalCost:
+          type: number
+        isCheapest:
+          type: boolean
+        savingsVsMostExpensive:
+          type: number
+      required:
+        - storeId
+        - storeName
+        - color
+        - totalCost
+        - isCheapest
+        - savingsVsMostExpensive
+
+    ShoppingSummary:
+      type: object
+      properties:
+        totalRecipes:
+          type: integer
+        totalIngredients:
+          type: integer
+        totalStores:
+          type: integer
+        cheapestStore:
+          type: string
+        averageWeeklyBudget:
+          type: number
+        maxSavings:
+          type: number
+      required:
+        - totalRecipes
+        - totalIngredients
+        - totalStores
+        - cheapestStore
+        - averageWeeklyBudget
+        - maxSavings
