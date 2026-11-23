@@ -1,59 +1,48 @@
-# ShopSmart
+# SmartShopper
 
-A weekly grocery co-pilot that helps households plan meals, generate shopping lists, and find the cheapest store for their groceries.
+SmartShopper is a weekly grocery planner with recipes, an editable meal plan, a combined shopping list and an optional live supermarket price lookup.
 
-## Run & Operate
+## Workspace
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
-- `pnpm --filter @workspace/shopsmart run dev` — run the ShopSmart frontend (port 18883)
-- `pnpm run typecheck` — full typecheck across all packages
-- `pnpm run build` — typecheck + build all packages
-- `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- `shopsmart/` — React + Vite web application
+- `api-server/` — Express API
+- `db/` — PostgreSQL schema and Drizzle configuration
+- `api-spec/` — OpenAPI contract
+- `api-zod/` — generated request/response validation
+- `api-client-react/` — generated React Query client
 
-## Stack
+## Local development
 
-- pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
-- Build: esbuild (CJS bundle)
-- Frontend: React + Vite + Tailwind CSS + shadcn/ui
+Use Node.js 24 and pnpm.
 
-## Where things live
+1. Install dependencies: `pnpm install`
+2. Configure `DATABASE_URL` for PostgreSQL.
+3. Apply the development schema: `pnpm --filter @workspace/db run push`
+4. Start the API on port 8080: `pnpm --filter @workspace/api-server run dev`
+5. In another terminal, start the frontend: `pnpm --filter @workspace/shopsmart run dev`
 
-- `lib/api-spec/openapi.yaml` — OpenAPI contract (source of truth)
-- `lib/db/src/schema/` — Drizzle table definitions (stores, ingredients, recipes)
-- `artifacts/api-server/src/routes/` — Express route handlers (stores, ingredients, recipes, shopping)
-- `artifacts/shopsmart/src/` — React frontend (pages: Dashboard, Planner, Recipes, RecipeForm)
+The Vite development server proxies `/api` to `http://127.0.0.1:8080`. Set `API_PROXY_TARGET` if the API runs elsewhere.
 
-## Architecture decisions
+## Live supermarket pricing
 
-- Contract-first: OpenAPI spec gates all codegen; frontend hooks are generated, never hand-written.
-- Shopping list and store comparison are computed server-side from DB prices, not hardcoded.
-- Prices stored as `price_per_100g` for consistent cost estimation regardless of ingredient quantity.
-- Recipe ingredients use a junction table (`recipe_ingredients`) to allow flexible recipe composition.
-- Summary endpoint aggregates stats across all recipes/stores for the dashboard.
+The live price route is opt-in. Set these as private server environment secrets, never in frontend code:
 
-## Product
+- `APIFY_TOKEN` — Apify API token
+- `APIFY_MONTHLY_BUDGET_CAP_USD` — optional internal allowance, capped in code at USD $4.50
 
-- **Dashboard** — Key stats (recipes, stores, avg budget, max savings) and quick navigation
-- **Planner** — Select recipes for the week, pick a store, set a budget, generate a shopping list with cost breakdown and over-budget alerts
-- **Recipes** — Browse and manage all recipes; add, edit, delete with full CRUD
-- **Store comparison** — Side-by-side cost comparison across Aldi, Coles, and Woolworths
+The adapter uses the `scrape-lads/au-grocery-scraper` actor for Coles, Woolworths and ALDI, with postcode-specific Coles/Woolworths pricing and national ALDI pricing. Each request is capped at eight search terms and 24 returned product rows. Results are cached in-process for five minutes. The app displays only positive AUD prices returned by the provider; absent prices remain unavailable.
 
-## User preferences
+The internal spend guard reserves USD $0.10 per uncached run against a monthly USD $4.50 allowance. This is a conservative application-level estimate, not a substitute for setting an account-level Apify spending limit. Verify the Apify account cap before enabling the token.
 
-_Populate as you build — explicit user instructions worth remembering across sessions._
+The new `price_provider_usage` table must be applied to the database before enabling the route. A missing token returns a configuration message; the app does not fabricate prices.
 
-## Gotchas
+## Checks
 
-- Always re-run codegen after changing `openapi.yaml`: `pnpm --filter @workspace/api-spec run codegen`
-- Drizzle count: use `sql<number>\`count(*)::int\`` not `db.$count()` (not a valid Drizzle API)
-- `db.$count` is not valid Drizzle ORM — use `db.select({ count: sql\`count(*)\` })`
+- `pnpm run typecheck`
+- `pnpm run build`
 
-## Pointers
+After changing `api-spec/openapi.yaml`, regenerate the API packages with `pnpm --filter @workspace/api-spec run codegen`.
 
-- See the `pnpm-workspace` skill for workspace structure, TypeScript setup, and package details
+## Important limitations
+
+The initial recipe catalogue is starter content, not a nutrition-verified clinical meal plan. The price adapter needs a configured Apify token and a live test against the actor's current output before production use. Retailer terms and commercial data-use permissions must be reviewed before public commercial launch.
