@@ -352,14 +352,13 @@ components:
         totalQtyG:
           type: number
         estimatedCost:
-          type: number
+          type: ["number", "null"]
         checked:
           type: boolean
       required:
         - ingredientId
         - ingredientName
         - totalQtyG
-        - estimatedCost
         - checked
 
     ShoppingList:
@@ -374,11 +373,11 @@ components:
           items:
             $ref: "#/components/schemas/ShoppingListItem"
         totalCost:
-          type: number
+          type: ["number", "null"]
         budget:
           type: ["number", "null"]
         withinBudget:
-          type: boolean
+          type: ["boolean", "null"]
         cheaperStoreId:
           type: ["integer", "null"]
         cheaperStoreName:
@@ -402,11 +401,11 @@ components:
         color:
           type: string
         totalCost:
-          type: number
+          type: ["number", "null"]
         isCheapest:
           type: boolean
         savingsVsMostExpensive:
-          type: number
+          type: ["number", "null"]
       required:
         - storeId
         - storeName
