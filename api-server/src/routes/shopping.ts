@@ -26,6 +26,7 @@ async function buildShoppingData(recipeIds: number[]) {
 }
 
 function costForStore(storeId: number, ingredients: Array<{id:number}>, totals: Record<number,number>, prices: Array<{ingredientId:number;storeId:number;pricePer100g:string}>) {
+  if (!ingredients.length) return null;
   let total = 0;
   for (const ingredient of ingredients) {
     const price = prices.find(p => p.ingredientId === ingredient.id && p.storeId === storeId);
