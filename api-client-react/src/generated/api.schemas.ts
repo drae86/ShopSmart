@@ -61,7 +61,7 @@ export interface ShoppingListItem {
   ingredientId: number;
   ingredientName: string;
   totalQtyG: number;
-  estimatedCost: number;
+  estimatedCost: number | null;
   checked: boolean;
 }
 
@@ -69,10 +69,10 @@ export interface ShoppingList {
   storeId: number;
   storeName: string;
   items: ShoppingListItem[];
-  totalCost: number;
+  totalCost: number | null;
   /** @nullable */
   budget?: number | null;
-  withinBudget: boolean;
+  withinBudget: boolean | null;
   /** @nullable */
   cheaperStoreId?: number | null;
   /** @nullable */
@@ -87,7 +87,7 @@ export interface StoreComparison {
   color: string;
   totalCost: number;
   isCheapest: boolean;
-  savingsVsMostExpensive: number;
+  savingsVsMostExpensive: number | null;
 }
 
 export interface ShoppingSummary {
