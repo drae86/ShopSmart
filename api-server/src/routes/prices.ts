@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 const router: IRouter = Router();
 const cache = new Map<string, { expiresAt: number; payload: unknown }>();
 const STORES = ["coles", "woolworths", "aldi"] as const;
-const RESERVED_RUN_COST_USD = 0.05;
+const RESERVED_RUN_COST_USD = 0.10;
 
 router.post("/prices/search", async (req, res): Promise<void> => {
   const token = process.env.APIFY_TOKEN;
@@ -23,7 +23,8 @@ router.post("/prices/search", async (req, res): Promise<void> => {
   const cached = cache.get(cacheKey);
   if (cached && cached.expiresAt > Date.now()) { res.json({ ...(cached.payload as object), cached: true }); return; }
 
-  const cap = Math.min(4.5, Math.max(0.1, Number(process.env.APIFY_MONTHLY_BUDGET_CAP_USD || 4.5)));
+  const configuredCap = Number(process.env.APIFY_MONTHLY_BUDGET_CAP_USD || 4.5);
+  const cap = Number.isFinite(configuredCap) ? Math.min(4.5, Math.max(0.1, configuredCap)) : 4.5;
   const month = new Date().toISOString().slice(0, 7);
   const statement = "INSERT INTO price_provider_usage (month, estimated_spend_usd) VALUES ('" + month + "', " + RESERVED_RUN_COST_USD + ") ON CONFLICT (month) DO UPDATE SET estimated_spend_usd = price_provider_usage.estimated_spend_usd + " + RESERVED_RUN_COST_USD + ", updated_at = NOW() WHERE price_provider_usage.estimated_spend_usd + " + RESERVED_RUN_COST_USD + " <= " + cap + " RETURNING estimated_spend_usd";
   const reservation = await db.execute(sql.raw(statement));
@@ -35,26 +36,28 @@ router.post("/prices/search", async (req, res): Promise<void> => {
     const response = await fetch("https://api.apify.com/v2/acts/scrape-lads~au-grocery-scraper/run-sync-get-dataset-items", {
       method: "POST",
       headers: { Authorization: "Bearer " + token, "Content-Type": "application/json" },
-      body: JSON.stringify({ searchTerms, stores: [...STORES], maxItemsPerQuery: 3, maxItems: Math.min(24, searchTerms.length * 3), postcodes: [postcode], includeOutOfStock: false }),
+      body: JSON.stringify({ searchTerms, stores: [...STORES], maxItemsPerQuery: 3, maxItems: Math.min(24, searchTerms.length * 3), postcodes: [postcode],  }),
       signal: AbortSignal.timeout(120000)
     });
     if (!response.ok) { const detail = (await response.text()).slice(0, 300); res.status(502).json({ error: "Price provider returned " + response.status + ". " + detail }); return; }
     const raw: unknown = await response.json();
     const items = (Array.isArray(raw) ? raw : []).flatMap((entry: any) => {
-      if (!entry || typeof entry.name !== "string" || !Number.isFinite(Number(entry.price)) || Number(entry.price) <= 0) return [];
-      const retailer = String(entry.retailer || "").toLowerCase();
-      if (!STORES.includes(retailer as typeof STORES[number])) return [];
+      if (!entry || typeof (entry.productName || entry.name || entry.title) !== "string" || !Number.isFinite(Number(entry.price)) || Number(entry.price) <= 0) return [];
+      const retailer = String(entry.retailer || entry.storeName || entry.store || entry.chain || "").toLowerCase();
+      const matchedStore = STORES.find(store => retailer.includes(store));
+      if (!matchedStore) return [];
+      if (entry.currency && String(entry.currency).toUpperCase() !== "AUD") return [];
       return [{
-        retailer: retailer === "aldi" ? "ALDI" : retailer === "coles" ? "Coles" : "Woolworths",
-        name: entry.name, brand: typeof entry.brand === "string" ? entry.brand : undefined,
-        size: typeof entry.size === "string" ? entry.size : undefined, price: Number(entry.price),
-        wasPrice: Number(entry.wasPrice) > Number(entry.price) ? Number(entry.wasPrice) : undefined,
+        retailer: matchedStore === "aldi" ? "ALDI" : matchedStore === "coles" ? "Coles" : "Woolworths",
+        name: entry.productName || entry.name || entry.title, brand: typeof entry.brand === "string" ? entry.brand : undefined,
+        size: typeof (entry.packSize || entry.size || entry.packageSize) === "string" ? (entry.packSize || entry.size || entry.packageSize) : undefined, price: Number(entry.price),
+        wasPrice: Number(entry.wasPrice || entry.originalPrice || entry.regularPrice) > Number(entry.price) ? Number(entry.wasPrice || entry.originalPrice || entry.regularPrice) : undefined,
         unitPrice: Number(entry.unitPrice) > 0 ? Number(entry.unitPrice) : undefined,
-        unit: typeof entry.unit === "string" ? entry.unit : undefined,
-        inStock: typeof entry.inStock === "boolean" ? entry.inStock : null,
+        unit: typeof (entry.unitPriceUnit || entry.unit || entry.unitPriceBasis) === "string" ? (entry.unitPriceUnit || entry.unit || entry.unitPriceBasis) : undefined,
+        inStock: typeof entry.inStock === "boolean" ? entry.inStock : String(entry.availability || "").toLowerCase().includes("out") ? false : String(entry.availability || "").toLowerCase().includes("stock") ? true : null,
         productUrl: typeof entry.productUrl === "string" && entry.productUrl.startsWith("https://") ? entry.productUrl : undefined,
         scrapedAt: typeof entry.scrapedAt === "string" ? entry.scrapedAt : undefined,
-        query: typeof entry.query === "string" ? entry.query : undefined
+        query: typeof (entry.searchTerm || entry.query) === "string" ? (entry.searchTerm || entry.query) : undefined
       }];
     });
     const payload = { configured: true, postcode, items, refreshedAt: new Date().toISOString(), budget: { cap, used: estimatedUsed }, cached: false };
