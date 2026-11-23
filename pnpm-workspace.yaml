@@ -35,10 +35,14 @@ minimumReleaseAgeExclude:
   - stripe-replit-sync
 
 packages:
-  - artifacts/*
-  - lib/*
-  - lib/integrations/*
+  - api-server
+  - api-client-react
+  - api-zod
+  - api-spec
+  - db
+  - shopsmart
   - scripts
+  - mockup-sandbox
 
 catalog:
   '@replit/vite-plugin-cartographer': ^0.5.1

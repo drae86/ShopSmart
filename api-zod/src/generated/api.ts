@@ -157,12 +157,12 @@ export const GetShoppingListResponse = zod.object({
   "ingredientId": zod.number(),
   "ingredientName": zod.string(),
   "totalQtyG": zod.number(),
-  "estimatedCost": zod.number(),
+  "estimatedCost": zod.number().nullable(),
   "checked": zod.boolean()
 })),
-  "totalCost": zod.number(),
+  "totalCost": zod.number().nullable(),
   "budget": zod.number().nullish(),
-  "withinBudget": zod.boolean(),
+  "withinBudget": zod.boolean().nullable(),
   "cheaperStoreId": zod.number().nullish(),
   "cheaperStoreName": zod.string().nullish(),
   "cheaperStoreCost": zod.number().nullish()
@@ -180,9 +180,9 @@ export const CompareStoresResponseItem = zod.object({
   "storeId": zod.number(),
   "storeName": zod.string(),
   "color": zod.string(),
-  "totalCost": zod.number(),
+  "totalCost": zod.number().nullable(),
   "isCheapest": zod.boolean(),
-  "savingsVsMostExpensive": zod.number()
+  "savingsVsMostExpensive": zod.number().nullable()
 })
 export const CompareStoresResponse = zod.array(CompareStoresResponseItem)
 
