@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, priceProviderUsageTable } from "@workspace/db";
+import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
 
 const router: IRouter = Router();
@@ -54,7 +54,7 @@ router.post("/prices/search", async (req, res): Promise<void> => {
         wasPrice: Number(entry.wasPrice || entry.originalPrice || entry.regularPrice) > Number(entry.price) ? Number(entry.wasPrice || entry.originalPrice || entry.regularPrice) : undefined,
         unitPrice: Number(entry.unitPrice) > 0 ? Number(entry.unitPrice) : undefined,
         unit: typeof (entry.unitPriceUnit || entry.unit || entry.unitPriceBasis) === "string" ? (entry.unitPriceUnit || entry.unit || entry.unitPriceBasis) : undefined,
-        inStock: typeof entry.inStock === "boolean" ? entry.inStock : String(entry.availability || "").toLowerCase().includes("out") ? false : String(entry.availability || "").toLowerCase().includes("stock") ? true : null,
+        inStock: typeof entry.inStock === "boolean" ? entry.inStock : String(entry.stockStatus || entry.availability || "").toLowerCase().includes("out") ? false : String(entry.availability || "").toLowerCase().includes("stock") ? true : null,
         productUrl: typeof entry.productUrl === "string" && entry.productUrl.startsWith("https://") ? entry.productUrl : undefined,
         scrapedAt: typeof entry.scrapedAt === "string" ? entry.scrapedAt : undefined,
         query: typeof (entry.searchTerm || entry.query) === "string" ? (entry.searchTerm || entry.query) : undefined
